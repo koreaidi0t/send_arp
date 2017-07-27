@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 	res = pcap_next_ex(handle, &header, &packet);
 
 
-	for(int i=0;i<5;i++)
+	for(int i=0;i<1;i++)
 	{
 
 	if((pcap_sendpacket(handle, arpr_buf,42))==0)
@@ -266,6 +266,8 @@ int main(int argc, char *argv[])
 
 	arp->arp_op=htons(ARPOP_REPLY);
 	
+	memcpy(arp->arp_tha,ethr->ether_dhost,6);
+
 	memcpy(arp->arp_sha,mymac,6);
 
 	memcpy(arp_buf, packet, 42);
