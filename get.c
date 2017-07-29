@@ -1,13 +1,3 @@
-/*
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
-#include <unistd.h>
-#include <arpa/inet.h>
-*/
 #include <stdio.h>
 #include <stropts.h>
 #include <sys/socket.h>
@@ -21,7 +11,8 @@
 
 
 
-int getmac(void* mac_){
+int getmac(void* mac_)
+{
 
 struct ifreq s;
 
@@ -34,6 +25,8 @@ if (0 == ioctl(fd, SIOCGIFHWADDR, &s)) {
 int i;
 
 memcpy(mac_,s.ifr_addr.sa_data,6);
+
+printf("Mac Address:");
 
 for (i = 0; i < 6; ++i)
 
@@ -62,43 +55,10 @@ void getip(void* ip,char* pargv_)
             
             inet_ntop(AF_INET,&(sa->sin_addr),ip,INET_ADDRSTRLEN);
             
-            printf("Interface: %s\tAddress: %s\n", ifa->ifa_name, ip);
+            printf("Interface: %s\t Address: %s\n", ifa->ifa_name, ip);
         }
     }
 
     freeifaddrs(ifap);
     return;
 }
-
-/*
-
-int main(int argc,char* argv[])
-
-{
-  if(argc!=2) return 0;
-    
-  uint8_t myip[15];
-  
-  uint8_t mymac[6];
-
-  strncpy(myd,argv[1],strlen(argv[1]));
-
-  myd[strlen(argv[1])]='\0';
-
-  printf("myd %s\n",myd);
-
-  gett(myip,myd);
-  
-  printf("%s\n",myip);
-
-  getmac(mymac);
-
-  for (int i = 0; i < 6; ++i)
-
-  printf(" %02x", mymac[i]);
-
-  puts("");
-
-}
-
-*/
