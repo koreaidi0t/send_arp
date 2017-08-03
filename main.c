@@ -23,6 +23,7 @@ int main(int argc, char *argv[])
 	const u_char *packet;		/* The actual packet */
 	struct libnet_ipv4_hdr* ip;
 	uint8_t ip_addr[15];
+	uint8_t ip_addrp[16];
 	struct libnet_tcp_hdr* tcp;
 	struct ether_arp* arp;
 	const uint8_t* sender_ip;
@@ -44,7 +45,7 @@ int main(int argc, char *argv[])
 	if((strlen(argv[2])>15||strlen(argv[2])<7)||(strlen(argv[3])>15||strlen(argv[3])<7)){ printf("Select the correct ip!!\n"); exit(0);}
 
 
-	handle = pcap_open_live(argv[1], BUFSIZ, 1, 1, errbuf);
+	handle = pcap_open_live(argv[1], BUFSIZ, 1, 1000, errbuf);
 	
 	if (handle == NULL) {
 		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
@@ -82,20 +83,18 @@ int main(int argc, char *argv[])
 
 	memcpy(a_arp->arp_sha,mymac,6);
 	
-	inet_pton(AF_INET,target_ip,(a_arp->arp_tpa));
+	inet_pton(AF_INET,sender_ip,(a_arp->arp_tpa));
 	
 	inet_pton(AF_INET,ip_addr,(a_arp->arp_spa));
 
 	while(1)
 	{
 		int chk=1;
-		res = pcap_next_ex(handle, &header, &packet);
-
-
+		
 		for(int i=0;i<1;i++)
 		{
 
-			if((pcap_sendpacket(handle, arpr_buf,42))==0)
+			if((pcap_sendpacket(handle, arpr_buf,sizeof(struct ether_arp)+sizeof(struct libnet_ethernet_hdr)))==0)
 			{
 		
 				printf("Request!\n");
@@ -111,6 +110,10 @@ int main(int argc, char *argv[])
 		
 			}
 		}
+
+
+		res = pcap_next_ex(handle, &header, &packet);
+
 
 		if(res<1)
 		{
@@ -153,13 +156,14 @@ int main(int argc, char *argv[])
 		if(ntohs(ethr->ether_type)!=ETHERTYPE_ARP){printf("It doesn't seem ARP Packet\n");continue;}
 	
 	
-		inet_ntop(AF_INET,(arp->arp_spa),ip_addr,INET_ADDRSTRLEN);
+		inet_ntop(AF_INET,(arp->arp_spa),ip_addrp,INET_ADDRSTRLEN);
+		ip_addrp[15]='\0';
 
 
-		printf("ip.src : %s\n",ip_addr);
+		printf("ip.src : %s\n",ip_addrp);
 
 
-		inet_ntop(AF_INET,(arp->arp_tpa),ip_addr,INET_ADDRSTRLEN);
+		inet_ntop(AF_INET,(arp->arp_tpa),ip_addrp,INET_ADDRSTRLEN);
 
 
 		printf("ip.dst : %s\n",ip_addr);
@@ -180,10 +184,10 @@ int main(int argc, char *argv[])
 			printf("It is arp reply packet\n\n");
 			
 //			printf("!!!!!%d!!!!!\n",strcmp(ip_addr,target_ip));
-			if(strcmp(ip_addr,target_ip)==0)break;
+			if(strcmp(ip_addr,sender_ip)==0)break;
 		}
 
-		else {printf("It dosen't seem reply packet%x\n\n",arp->arp_op); continue;}
+		else {printf("It dosen't seem reply packet\n\n"); continue;}
 
 	}
 	
@@ -193,10 +197,10 @@ int main(int argc, char *argv[])
 	memcpy(ethr->ether_shost,mymac,6);
 	
 	
-	inet_pton(AF_INET,target_ip,&(arp->arp_tpa));
+	inet_pton(AF_INET,sender_ip,&(arp->arp_tpa));
 	
 
-	inet_pton(AF_INET,sender_ip,&(arp->arp_spa));
+	inet_pton(AF_INET,target_ip,&(arp->arp_spa));
 
 
 	arp->arp_op=htons(ARPOP_REPLY);
@@ -214,7 +218,7 @@ int main(int argc, char *argv[])
 	while(1)
 	{
 
-	if((pcap_sendpacket(handle, arp_buf,42))==0)
+	if((pcap_sendpacket(handle, arp_buf,sizeof(struct ether_arp)+sizeof(struct libnet_ethernet_hdr)))==0)
 		{
 		
 		printf("Send!\n");
